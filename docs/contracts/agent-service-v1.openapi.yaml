@@ -1,0 +1,338 @@
+openapi: 3.1.0
+info:
+  title: Ragent Internal Agent Service
+  version: 1.0.0
+  description: Versioned contract between the Java control plane and Python Agent runtime.
+servers:
+  - url: http://agent-service:8000
+security:
+  - delegatedBearer: []
+paths:
+  /internal/v1/health:
+    get:
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: Service is ready to accept new runs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /internal/v1/agent-runs:
+    post:
+      operationId: createAgentRun
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/Traceparent"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentRunRequest"
+      responses:
+        "202":
+          description: Run was accepted. Repeating the idempotency key returns the same run.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRunAccepted"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+  /internal/v1/agent-runs/{runId}:
+    get:
+      operationId: getAgentRun
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/Traceparent"
+      responses:
+        "200":
+          description: Current durable state of the run.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRunState"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /internal/v1/agent-runs/{runId}/events:
+    get:
+      operationId: streamAgentRunEvents
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/Traceparent"
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema:
+            type: string
+          description: Last acknowledged event sequence used for stream resumption.
+      responses:
+        "200":
+          description: |
+            SSE stream. Each event has an id, event name and JSON data matching AgentEvent.
+            A run emits exactly one terminal event: run_completed, run_failed or run_cancelled.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              x-sse-event-schema:
+                $ref: "#/components/schemas/AgentEvent"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /internal/v1/agent-runs/{runId}/cancel:
+    post:
+      operationId: cancelAgentRun
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/Traceparent"
+      responses:
+        "202":
+          description: Cancellation was accepted or the run was already terminal.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRunState"
+        "404":
+          $ref: "#/components/responses/Problem"
+  /internal/v1/agent-runs/{runId}/resume:
+    post:
+      operationId: resumeAgentRun
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/Traceparent"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalDecision"
+      responses:
+        "202":
+          description: The durable run accepted the approval decision or user input.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRunState"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+components:
+  securitySchemes:
+    delegatedBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived token issued by Java for the Python Agent Service audience.
+  parameters:
+    RunId:
+      name: runId
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+    Traceparent:
+      name: traceparent
+      in: header
+      required: false
+      schema:
+        type: string
+  responses:
+    Problem:
+      description: Request failed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ready]
+        version:
+          type: string
+    AgentRunRequest:
+      type: object
+      additionalProperties: false
+      required: [requestId, conversationId, agentType, input, access]
+      properties:
+        requestId:
+          type: string
+          minLength: 1
+        conversationId:
+          type: string
+          minLength: 1
+        agentType:
+          type: string
+          enum: [knowledge, business, data_analysis, workflow]
+        input:
+          type: string
+          minLength: 1
+          maxLength: 32000
+        access:
+          $ref: "#/components/schemas/AccessContext"
+        options:
+          $ref: "#/components/schemas/AgentRunOptions"
+        metadata:
+          type: object
+          additionalProperties: true
+    AccessContext:
+      type: object
+      additionalProperties: false
+      required: [userId, roles, allowedKnowledgeBaseIds, toolScopes]
+      properties:
+        tenantId:
+          type: [string, "null"]
+          description: Required after tenant support is introduced in the Java domain model.
+        userId:
+          type: string
+          minLength: 1
+        roles:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        allowedKnowledgeBaseIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        toolScopes:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+    AgentRunOptions:
+      type: object
+      additionalProperties: false
+      properties:
+        deepThinking:
+          type: boolean
+          default: false
+        locale:
+          type: string
+          default: zh-CN
+        deadlineMs:
+          type: integer
+          minimum: 1000
+          maximum: 900000
+        shadow:
+          type: boolean
+          default: false
+    AgentRunAccepted:
+      type: object
+      additionalProperties: false
+      required: [runId, status, eventStreamUrl]
+      properties:
+        runId:
+          type: string
+        status:
+          $ref: "#/components/schemas/RunStatus"
+        eventStreamUrl:
+          type: string
+          format: uri-reference
+    AgentRunState:
+      type: object
+      additionalProperties: false
+      required: [runId, status, updatedAt]
+      properties:
+        runId:
+          type: string
+        status:
+          $ref: "#/components/schemas/RunStatus"
+        waitingApprovalId:
+          type: [string, "null"]
+        updatedAt:
+          type: string
+          format: date-time
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/Problem"
+            - type: "null"
+    RunStatus:
+      type: string
+      enum: [accepted, running, waiting_approval, completed, failed, cancelled]
+    AgentEvent:
+      type: object
+      additionalProperties: false
+      required: [runId, sequence, type, timestamp, data]
+      properties:
+        runId:
+          type: string
+        sequence:
+          type: integer
+          minimum: 0
+        type:
+          type: string
+          enum:
+            - run_started
+            - thinking_delta
+            - answer_delta
+            - sources
+            - tool_started
+            - tool_completed
+            - approval_required
+            - run_completed
+            - run_failed
+            - run_cancelled
+            - heartbeat
+        timestamp:
+          type: string
+          format: date-time
+        data:
+          type: object
+          additionalProperties: true
+    ApprovalDecision:
+      type: object
+      additionalProperties: false
+      required: [approvalId, decision]
+      properties:
+        approvalId:
+          type: string
+          minLength: 1
+        decision:
+          type: string
+          enum: [approve, reject, provide_input]
+        input:
+          type: [string, "null"]
+          maxLength: 32000
+    Problem:
+      type: object
+      additionalProperties: true
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string
+        traceId:
+          type: string
