@@ -17,6 +17,8 @@
 
 package com.nageoffer.ai.ragent.rag.service.ratelimit;
 
+import com.nageoffer.ai.ragent.agent.event.AgentEvent;
+import com.nageoffer.ai.ragent.agent.event.AgentEventPublisher;
 import cn.dev33.satoken.stp.StpUtil;
 import com.alibaba.ttl.TtlRunnable;
 import cn.hutool.core.util.IdUtil;
@@ -83,6 +85,48 @@ public class ChatQueueLimiter {
                     emitter.onError(e -> cancel.run());
                 })
                 .build());
+    }
+
+    public void enqueue(String question,
+                        String conversationId,
+                        String userId,
+                        AgentEventPublisher publisher,
+                        Runnable onAcquire) {
+        if (!Boolean.TRUE.equals(rateLimitProperties.getGlobalEnabled())) {
+            try {
+                chatEntryExecutor.execute(onAcquire);
+            } catch (RejectedExecutionException ex) {
+                log.warn("Agent entry executor rejected a request", ex);
+                handleAgentReject(question, conversationId, userId, publisher);
+            }
+            return;
+        }
+
+        chatRateLimiter.acquire(AcquireRequest.builder()
+                .maxWaitMillis(TimeUnit.SECONDS.toMillis(rateLimitProperties.getGlobalMaxWaitSeconds()))
+                .onAcquired(TtlRunnable.get(onAcquire))
+                .onTimeout(TtlRunnable.get(() -> handleAgentReject(question, conversationId, userId, publisher)))
+                .onAcquiredExecutor(chatEntryExecutor)
+                .cancelBinder(publisher::onClose)
+                .build());
+    }
+
+    private void handleAgentReject(String question,
+                                   String conversationId,
+                                   String userId,
+                                   AgentEventPublisher publisher) {
+        RejectedContext context = null;
+        try {
+            context = recordRejectedConversation(question, conversationId, userId);
+        } catch (Exception ex) {
+            log.warn("Failed to record rejected Agent conversation", ex);
+        }
+        if (context != null) {
+            publisher.publish(AgentEvent.rejected(REJECT_MESSAGE));
+            publisher.publish(AgentEvent.completed(new CompletionPayload(
+                    context.messageId(), context.title(), null, ChatMessage.MessageStatus.REJECTED)));
+        }
+        publisher.complete();
     }
 
     // ==================== Reject 业务 ====================

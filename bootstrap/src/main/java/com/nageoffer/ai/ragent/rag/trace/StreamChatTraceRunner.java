@@ -121,6 +121,62 @@ public class StreamChatTraceRunner {
      * 记录用户感知首包 TTFT：从 run 开始（pipeline 入口）到推给前端第一个字
      * 反映完整链路前置开销（路由 / 改写 / 意图 / 检索 / LLM 首包等）
      */
+    public void run(String question,
+                    String conversationId,
+                    String taskId,
+                    String userId,
+                    StreamCallback callback,
+                    Consumer<StreamCallback> businessLogic) {
+        if (!traceProperties.isEnabled()) {
+            runWithoutTrace(conversationId, taskId, callback, businessLogic);
+            return;
+        }
+
+        String traceId = IdUtil.getSnowflakeNextIdStr();
+        long startMillis = System.currentTimeMillis();
+        traceRecordService.startRun(RagTraceRunDO.builder()
+                .traceId(traceId)
+                .traceName(TRACE_NAME)
+                .entryMethod(ENTRY_METHOD)
+                .conversationId(conversationId)
+                .taskId(taskId)
+                .userId(userId)
+                .status(STATUS_RUNNING)
+                .startTime(new Date())
+                .extraData(JSONUtil.createObj()
+                        .set("questionLength", StrUtil.length(question))
+                        .set("question", question)
+                        .toString())
+                .build());
+
+        Date runStartTime = new Date(startMillis);
+        StreamCallback traceAwareCallback = new ForwardingStreamCallback(callback) {
+            @Override
+            protected void onFirstContent() {
+                recordUserTtft(traceId, runStartTime, startMillis);
+            }
+
+            @Override
+            protected void onFinish(boolean success, Throwable error) {
+                finishRun(traceId, success, error, startMillis);
+            }
+        };
+
+        RagTraceContext.setTraceId(traceId);
+        RagTraceContext.setTaskId(taskId);
+        try {
+            businessLogic.accept(traceAwareCallback);
+        } catch (Throwable ex) {
+            log.warn("Failed to execute stream chat, conversationId: {}, taskId: {}", conversationId, taskId, ex);
+            try {
+                traceAwareCallback.onError(ex);
+            } catch (Throwable ignored) {
+            }
+        } finally {
+            RagTraceContext.clear();
+        }
+    }
+
     private void recordUserTtft(String traceId, Date runStartTime, long startMillis) {
         long now = System.currentTimeMillis();
         long durationMs = Math.max(0, now - startMillis);

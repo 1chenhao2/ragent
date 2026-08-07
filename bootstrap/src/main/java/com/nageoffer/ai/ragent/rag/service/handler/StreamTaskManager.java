@@ -20,6 +20,8 @@ package com.nageoffer.ai.ragent.rag.service.handler;
 import cn.hutool.core.util.StrUtil;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.nageoffer.ai.ragent.agent.event.AgentEvent;
+import com.nageoffer.ai.ragent.agent.event.AgentEventPublisher;
 import com.nageoffer.ai.ragent.rag.enums.SSEEventType;
 import com.nageoffer.ai.ragent.rag.dto.CompletionPayload;
 import com.nageoffer.ai.ragent.framework.web.SseEmitterSender;
@@ -87,6 +89,17 @@ public class StreamTaskManager {
         }
     }
 
+    public void register(String taskId, AgentEventPublisher publisher, Supplier<CompletionPayload> onCancelSupplier) {
+        StreamTaskInfo taskInfo = getOrCreate(taskId);
+        taskInfo.publisher = publisher;
+        taskInfo.onCancelSupplier = onCancelSupplier;
+        if (isTaskCancelledInRedis(taskId, taskInfo)) {
+            CompletionPayload payload = taskInfo.onCancelSupplier.get();
+            publisher.publish(AgentEvent.cancelled(payload));
+            publisher.complete();
+        }
+    }
+
     public void bindHandle(String taskId, StreamCancellationHandle handle) {
         StreamTaskInfo taskInfo = getOrCreate(taskId);
         taskInfo.handle = handle;
@@ -143,6 +156,13 @@ public class StreamTaskManager {
             taskInfo.handle.cancel();
         }
 
+        if (taskInfo.publisher != null) {
+            CompletionPayload payload = taskInfo.onCancelSupplier.get();
+            taskInfo.publisher.publish(AgentEvent.cancelled(payload));
+            taskInfo.publisher.complete();
+            return;
+        }
+
         // 在取消时执行回调，保存已累积的内容
         if (taskInfo.sender != null) {
             CompletionPayload payload = taskInfo.onCancelSupplier.get();
@@ -178,6 +198,7 @@ public class StreamTaskManager {
         private final AtomicBoolean cancelled = new AtomicBoolean(false);
         private volatile StreamCancellationHandle handle;
         private volatile SseEmitterSender sender;
+        private volatile AgentEventPublisher publisher;
         private volatile Supplier<CompletionPayload> onCancelSupplier;
     }
 }
