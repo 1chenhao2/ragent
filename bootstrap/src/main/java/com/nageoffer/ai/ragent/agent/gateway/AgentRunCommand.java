@@ -27,6 +27,19 @@ public record AgentRunCommand(
         String userId,
         AgentType agentType,
         String input,
-        boolean deepThinking
+        boolean deepThinking,
+        AgentAccessContext access
 ) {
+
+    public AgentRunCommand(
+            String requestId,
+            String runId,
+            String conversationId,
+            String userId,
+            AgentType agentType,
+            String input,
+            boolean deepThinking
+    ) {
+        this(requestId, runId, conversationId, userId, agentType, input, deepThinking, AgentAccessContext.denied());
+    }
 }

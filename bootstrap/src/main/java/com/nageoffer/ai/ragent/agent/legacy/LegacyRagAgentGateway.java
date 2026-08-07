@@ -29,12 +29,14 @@ import com.nageoffer.ai.ragent.rag.service.pipeline.StreamChatPipeline;
 import com.nageoffer.ai.ragent.rag.service.ratelimit.ChatQueueLimiter;
 import com.nageoffer.ai.ragent.rag.trace.StreamChatTraceRunner;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
  * Adapter for the current Java RAG runtime.
  */
 @Component
+@ConditionalOnProperty(name = "ragent.agent.runtime", havingValue = "legacy", matchIfMissing = true)
 @RequiredArgsConstructor
 public class LegacyRagAgentGateway implements AgentGateway {
 

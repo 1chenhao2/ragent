@@ -33,7 +33,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -71,6 +74,10 @@ class RAGChatServiceImplTest {
         assertTrue(StrUtil.isNotBlank(command.runId()));
         assertTrue(StrUtil.isNotBlank(command.conversationId()));
         assertEquals("user-1", command.userId());
+        assertEquals(Set.of("user"), command.access().roles());
+        assertTrue(command.access().allowedKnowledgeBaseIds().isEmpty());
+        assertEquals(Set.of("knowledge:read"), command.access().toolScopes());
+        assertNull(command.access().tenantId());
         assertEquals(AgentType.KNOWLEDGE, command.agentType());
         assertEquals("question", command.input());
         assertTrue(command.deepThinking());
