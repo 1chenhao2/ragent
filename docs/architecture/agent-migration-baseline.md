@@ -45,7 +45,9 @@ The versioned contract is `docs/contracts/agent-service-v1.openapi.yaml`. A Java
 
 ### Python to Java tools
 
-Python invokes allowlisted internal Java tools with a short-lived delegated token. Java rechecks tenant, user, role, resource scope and operation permission on every call. Model-provided identifiers are never trusted as identity.
+Python invokes allowlisted internal Java tools using `docs/contracts/business-tools-v1.openapi.yaml` and a short-lived delegated token. Java rechecks tenant, user, role, resource scope and operation permission on every call. Model-provided identifiers are never trusted as identity.
+
+The first allowlisted Tool is the read-only `knowledge_base.list`. Java resolves all active knowledge-base IDs under the current single-tenant authorization model, then defensively filters Tool results against the delegated IDs. The second Tool is the read-only `dashboard.overview`, available only through the `dashboard:read` scope that Java grants to administrators; it delegates to the existing `DashboardService` and bounds reporting windows. Write Tools remain disabled until approval and durable idempotency policies are defined for each operation.
 
 ### Asynchronous ingestion
 
@@ -55,9 +57,11 @@ Java owns document metadata and publishes ingestion requests. Python executes pa
 
 - `runId`, `requestId`, `traceparent` and idempotency keys propagate end to end.
 - The Java user token is not forwarded. Java issues an audience-restricted, short-lived internal token.
+- Delegated JWTs include separate `ragent-agent-service` and `ragent-business-tools` audiences. Each receiver verifies only its own audience.
 - Stateful tool calls require `toolCallId` idempotency and are not retried unless the tool declares that behavior safe.
-- LangGraph state is stored in a dedicated PostgreSQL schema or database, separate from Java business tables.
-- Vector queries always include tenant, knowledge-base and ACL filters.
+- Java stores Tool idempotency records in Redis under a distributed lock; key reuse with another payload returns a conflict.
+- Python run state, idempotency records, SSE events and LangGraph checkpoints can be stored in the dedicated `ragent_agent` PostgreSQL schema, separate from Java business tables. Approval resume requires a fresh Java-issued delegated token; delegated tokens are never written to run state or checkpoints.
+- Vector queries always include Java-authorized knowledge-base collection filters. Non-null tenant scope requires an indexed tenant metadata key; Python refuses retrieval when the tenant filter is unavailable.
 - Java retains a legacy Agent adapter until Python passes quality gates and rollback drills.
 
 ## Quality gates
@@ -66,7 +70,7 @@ Java owns document metadata and publishes ingestion requests. Python executes pa
 2. Existing SSE event order and terminal behavior remain compatible.
 3. Golden RAG cases meet agreed retrieval, citation and grounded-answer thresholds.
 4. Read-only tools match legacy behavior; write tools pass authorization, idempotency and approval tests.
-5. Cancellation, timeout, provider failure and Python restart recovery are verified.
+5. Cancellation, timeout, provider failure, approval pause/resume and Python restart reconciliation are verified. In-flight restart replay remains disabled until each write workflow has an explicit idempotency and side-effect recovery policy.
 6. Shadow traffic shows acceptable latency, token cost and failure-rate deltas.
 7. Secrets are supplied by environment or a secret manager and never committed.
 
@@ -91,4 +95,4 @@ Implement one knowledge-base question flow behind a disabled-by-default feature 
 3. Java maps Agent events to the existing SSE format and persists the final message.
 4. The same request can run against the legacy adapter for shadow comparison.
 
-No business write tool, ingestion migration or legacy deletion belongs in this first slice.
+No business write tool, ingestion migration or legacy deletion belongs in this first slice. Phase 6 connects the disabled-by-default Python knowledge graph to the existing pgvector index and OpenAI-compatible embedding/chat providers. The administrator dashboard-analysis slice adds a read-only business Tool but does not grant Python direct database access. Legacy remains the production default until the quality gates above pass.

@@ -33,6 +33,8 @@ import com.mzt.logapi.starter.annotation.LogRecord;
 import com.nageoffer.ai.ragent.audit.constant.BizChangeBizType;
 import com.nageoffer.ai.ragent.audit.constant.BizChangeOperationType;
 import com.nageoffer.ai.ragent.audit.support.BizChangeLogContext;
+import com.nageoffer.ai.ragent.agent.python.AgentIngestionGateway;
+import com.nageoffer.ai.ragent.agent.python.AgentGatewayException;
 import com.nageoffer.ai.ragent.core.chunk.ChunkEmbeddingService;
 import com.nageoffer.ai.ragent.core.chunk.ChunkingMode;
 import com.nageoffer.ai.ragent.core.chunk.ChunkingOptions;
@@ -85,6 +87,7 @@ import com.nageoffer.ai.ragent.rag.dto.StoredFileDTO;
 import com.nageoffer.ai.ragent.rag.service.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -93,6 +96,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -120,6 +124,7 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
     private final IngestionPipelineMapper ingestionPipelineMapper;
     private final IngestionEngine ingestionEngine;
     private final ChunkEmbeddingService chunkEmbeddingService;
+    private final ObjectProvider<AgentIngestionGateway> agentIngestionGatewayProvider;
     private final KnowledgeDocumentChunkLogMapper chunkLogMapper;
     private final KnowledgeChunkMapper chunkMapper;
     private final TransactionOperations transactionOperations;
@@ -368,6 +373,35 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
             String mimeType = MimeTypeDetector.detect(fileBytes, docName);
             if (mimeType == null) {
                 throw new RuntimeException("无法识别文件 MIME 类型：docId=" + documentDO.getId() + ", docName=" + docName);
+            }
+
+            AgentIngestionGateway pythonGateway = agentIngestionGatewayProvider.getIfAvailable();
+            if (pythonGateway != null && pythonGateway.supports(mimeType, embeddingModel)) {
+                try {
+                    AgentIngestionGateway.AgentIngestionResult remote = pythonGateway.compute(
+                            new AgentIngestionGateway.AgentIngestionRequest(
+                                    docName,
+                                    mimeType,
+                                    new String(fileBytes, StandardCharsets.UTF_8),
+                                    chunkingMode.getValue(),
+                                    integerChunkConfig(rawConfig),
+                                    embeddingModel
+                            )
+                    );
+                    return new ChunkProcessResult(
+                            remote.chunks(),
+                            remote.parseDuration(),
+                            remote.chunkDuration(),
+                            remote.embedDuration()
+                    );
+                } catch (RuntimeException ex) {
+                    if (!(ex instanceof AgentGatewayException gatewayException)
+                            || !gatewayException.isFallbackEligible()
+                            || !pythonGateway.fallbackToJava()) {
+                        throw ex;
+                    }
+                    log.warn("Python text ingestion failed; falling back to Java, docId={}", documentDO.getId(), ex);
+                }
             }
 
             DocumentParser parser = parserSelector.selectByMimeType(mimeType);
@@ -931,6 +965,22 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
             log.warn("分块参数解析失败: {}", json, e);
             return Map.of();
         }
+    }
+
+    private Map<String, Integer> integerChunkConfig(Map<String, Object> rawConfig) {
+        Map<String, Integer> config = new HashMap<>();
+        rawConfig.forEach((key, value) -> {
+            if (value instanceof Number number) {
+                config.put(key, number.intValue());
+            } else if (value instanceof String text && StringUtils.hasText(text)) {
+                try {
+                    config.put(key, Integer.parseInt(text.trim()));
+                } catch (NumberFormatException ignored) {
+                    // The Java fallback accepts free-form settings; omit non-numeric values from the Python contract.
+                }
+            }
+        });
+        return config;
     }
 
     /**

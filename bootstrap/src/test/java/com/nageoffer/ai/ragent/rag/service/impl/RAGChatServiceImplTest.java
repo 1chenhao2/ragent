@@ -19,6 +19,8 @@ package com.nageoffer.ai.ragent.rag.service.impl;
 
 import cn.hutool.core.util.StrUtil;
 import com.nageoffer.ai.ragent.agent.event.AgentEventPublisher;
+import com.nageoffer.ai.ragent.agent.gateway.AgentAccessContext;
+import com.nageoffer.ai.ragent.agent.gateway.AgentAccessResolver;
 import com.nageoffer.ai.ragent.agent.gateway.AgentGateway;
 import com.nageoffer.ai.ragent.agent.gateway.AgentRunCommand;
 import com.nageoffer.ai.ragent.agent.gateway.AgentType;
@@ -55,7 +57,13 @@ class RAGChatServiceImplTest {
     @BeforeEach
     void setUp() {
         UserContext.set(LoginUser.builder().userId("user-1").username("tester").role("user").build());
-        ragChatService = new RAGChatServiceImpl(agentGateway);
+        AgentAccessResolver accessResolver = (user, agentType) -> new AgentAccessContext(
+                null,
+                Set.of("user"),
+                Set.of("knowledge-1"),
+                Set.of("knowledge:read")
+        );
+        ragChatService = new RAGChatServiceImpl(agentGateway, accessResolver);
     }
 
     @AfterEach
@@ -75,7 +83,7 @@ class RAGChatServiceImplTest {
         assertTrue(StrUtil.isNotBlank(command.conversationId()));
         assertEquals("user-1", command.userId());
         assertEquals(Set.of("user"), command.access().roles());
-        assertTrue(command.access().allowedKnowledgeBaseIds().isEmpty());
+        assertEquals(Set.of("knowledge-1"), command.access().allowedKnowledgeBaseIds());
         assertEquals(Set.of("knowledge:read"), command.access().toolScopes());
         assertNull(command.access().tenantId());
         assertEquals(AgentType.KNOWLEDGE, command.agentType());

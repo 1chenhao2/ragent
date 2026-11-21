@@ -35,7 +35,18 @@ public class PythonAgentProperties {
     private Duration connectTimeout = Duration.ofSeconds(3);
     private Duration requestTimeout = Duration.ofSeconds(10);
     private Duration streamReadTimeout = Duration.ofSeconds(90);
+    private Duration runTimeout = Duration.ofMinutes(5);
+    private TextIngestion textIngestion = new TextIngestion();
     private DelegatedToken delegatedToken = new DelegatedToken();
+
+    @Data
+    public static class TextIngestion {
+
+        private boolean enabled = false;
+        private boolean fallbackToJava = true;
+        private String embeddingModelId = "qwen-emb-8b";
+        private int maxContentChars = 1_000_000;
+    }
 
     @Data
     public static class DelegatedToken {
@@ -43,6 +54,7 @@ public class PythonAgentProperties {
         private String secret = "";
         private String issuer = "ragent-java";
         private String audience = "ragent-agent-service";
-        private Duration ttl = Duration.ofMinutes(5);
+        private String businessToolAudience = "ragent-business-tools";
+        private Duration ttl = Duration.ofMinutes(10);
     }
 }

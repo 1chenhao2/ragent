@@ -33,4 +33,11 @@ public interface AgentGateway {
      * Cancels an agent run.
      */
     void cancel(String runId);
+
+    /**
+     * Resumes a paused workflow with a newly delegated authorization token.
+     */
+    default AgentRunHandle resume(String runId, AgentApprovalDecision decision) {
+        throw new UnsupportedOperationException("Agent workflow resume is not supported by this runtime");
+    }
 }

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import jwt
@@ -18,6 +18,7 @@ class DelegatedPrincipal:
     roles: frozenset[str]
     allowed_knowledge_base_ids: frozenset[str]
     tool_scopes: frozenset[str]
+    authorization: str = field(repr=False, compare=False)
 
 
 class DelegatedTokenVerifier:
@@ -52,6 +53,7 @@ class DelegatedTokenVerifier:
             roles=self._string_set(claims, "roles"),
             allowed_knowledge_base_ids=self._string_set(claims, "allowedKnowledgeBaseIds"),
             tool_scopes=self._string_set(claims, "toolScopes"),
+            authorization=f"Bearer {token}",
         )
 
     def validate_access(self, principal: DelegatedPrincipal, access: AccessContext) -> None:

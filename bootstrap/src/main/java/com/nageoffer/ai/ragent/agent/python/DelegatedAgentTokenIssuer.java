@@ -40,6 +40,7 @@ public class DelegatedAgentTokenIssuer {
     private final Algorithm algorithm;
     private final String issuer;
     private final String audience;
+    private final String businessToolAudience;
     private final Duration ttl;
     private final Clock clock;
 
@@ -58,6 +59,7 @@ public class DelegatedAgentTokenIssuer {
         this.algorithm = Algorithm.HMAC256(token.getSecret());
         this.issuer = token.getIssuer();
         this.audience = token.getAudience();
+        this.businessToolAudience = token.getBusinessToolAudience();
         this.ttl = token.getTtl();
         this.clock = clock;
     }
@@ -66,12 +68,18 @@ public class DelegatedAgentTokenIssuer {
      * Issues a token whose claims exactly match the run access context.
      */
     public String issue(AgentRunCommand command) {
+        return issue(command.userId(), command.access());
+    }
+
+    /**
+     * Issues a delegated token for a non-run Agent computation such as ingestion.
+     */
+    public String issue(String userId, AgentAccessContext access) {
         Instant issuedAt = clock.instant();
-        AgentAccessContext access = command.access();
         JWTCreator.Builder builder = JWT.create()
-                .withSubject(command.userId())
+                .withSubject(userId)
                 .withIssuer(issuer)
-                .withAudience(audience)
+                .withAudience(audience, businessToolAudience)
                 .withIssuedAt(Date.from(issuedAt))
                 .withExpiresAt(Date.from(issuedAt.plus(ttl)))
                 .withArrayClaim("roles", sorted(access.roles()))

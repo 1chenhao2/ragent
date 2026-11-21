@@ -19,6 +19,7 @@ package com.nageoffer.ai.ragent.agent.adapter.sse;
 
 import com.nageoffer.ai.ragent.agent.event.AgentEvent;
 import com.nageoffer.ai.ragent.agent.event.AgentEventPublisher;
+import com.nageoffer.ai.ragent.agent.event.ApprovalPayload;
 import com.nageoffer.ai.ragent.framework.web.SseEmitterSender;
 import com.nageoffer.ai.ragent.rag.dto.CompletionPayload;
 import com.nageoffer.ai.ragent.rag.dto.MessageDelta;
@@ -56,6 +57,8 @@ public class SseAgentEventPublisher implements AgentEventPublisher {
             case RUN_STARTED -> sender.sendEvent(SSEEventType.META.value(), (MetaPayload) event.data());
             case THINKING_DELTA, ANSWER_DELTA -> sender.sendEvent(
                     SSEEventType.MESSAGE.value(), (MessageDelta) event.data());
+            case APPROVAL_REQUIRED -> sender.sendEvent(
+                    SSEEventType.APPROVAL.value(), (ApprovalPayload) event.data());
             case CANCELLED -> sender.sendEvent(SSEEventType.CANCEL.value(), (CompletionPayload) event.data());
             case REJECTED -> sender.sendEvent(SSEEventType.REJECT.value(), (MessageDelta) event.data());
             case COMPLETED -> sender.sendEvent(SSEEventType.FINISH.value(), (CompletionPayload) event.data());

@@ -17,10 +17,17 @@
 
 package com.nageoffer.ai.ragent.agent.python;
 
+import java.util.Set;
+
 /**
  * Stable error raised when the remote Agent runtime cannot satisfy a gateway operation.
  */
 public class AgentGatewayException extends RuntimeException {
+
+    private static final Set<String> FALLBACK_CODES = Set.of(
+            "agent_service_unavailable",
+            "embedding_provider_failed"
+    );
 
     private final int status;
     private final String code;
@@ -43,5 +50,9 @@ public class AgentGatewayException extends RuntimeException {
 
     public String getCode() {
         return code;
+    }
+
+    public boolean isFallbackEligible() {
+        return FALLBACK_CODES.contains(code);
     }
 }

@@ -1,0 +1,214 @@
+openapi: 3.1.0
+info:
+  title: Ragent Internal Business Tools
+  version: 1.0.0
+  description: Versioned contract used by the Python Agent runtime to invoke Java-owned business Tools.
+servers:
+  - url: http://bootstrap:8080
+security:
+  - delegatedBusinessToolBearer: []
+paths:
+  /internal/v1/agent-tools/invoke:
+    post:
+      operationId: invokeAgentTool
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentToolCommand"
+      responses:
+        "200":
+          description: The allowlisted Tool completed, or a stored idempotent result was replayed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentToolResult"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+components:
+  securitySchemes:
+    delegatedBusinessToolBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived Java-issued JWT that must include the ragent-business-tools audience.
+  responses:
+    Problem:
+      description: Tool invocation failed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    AgentToolCommand:
+      type: object
+      additionalProperties: false
+      required: [toolName, toolCallId, idempotencyKey, arguments]
+      properties:
+        toolName:
+          type: string
+          enum: [knowledge_base.list, dashboard.overview]
+        toolCallId:
+          type: string
+          minLength: 1
+        idempotencyKey:
+          type: string
+          minLength: 16
+          maxLength: 128
+        arguments:
+          type: object
+          additionalProperties: false
+          properties:
+            knowledgeBaseIds:
+              type: array
+              uniqueItems: true
+              items:
+                type: string
+                minLength: 1
+            window:
+              type: string
+              pattern: '^([1-9][0-9]*)([dh])$'
+              description: Reporting window limited by Java to 1-720h or 1-90d.
+    AgentToolResult:
+      type: object
+      additionalProperties: false
+      required: [toolCallId, toolName, output]
+      properties:
+        toolCallId:
+          type: string
+        toolName:
+          type: string
+          enum: [knowledge_base.list, dashboard.overview, knowledge_document.overview]
+        output:
+          oneOf:
+            - $ref: "#/components/schemas/KnowledgeBaseListOutput"
+            - $ref: "#/components/schemas/DashboardOverviewOutput"
+            - $ref: "#/components/schemas/KnowledgeDocumentOverviewOutput"
+    KnowledgeBaseListOutput:
+      type: object
+      additionalProperties: false
+      required: [knowledgeBases]
+      properties:
+        knowledgeBases:
+          type: array
+          items:
+            $ref: "#/components/schemas/KnowledgeBase"
+    DashboardOverviewOutput:
+      type: object
+      additionalProperties: false
+      required: [window, updatedAt]
+      properties:
+        window:
+          type: string
+        compareWindow:
+          type: string
+        updatedAt:
+          type: integer
+          format: int64
+        kpis:
+          type: object
+          additionalProperties: true
+    KnowledgeBase:
+      type: object
+      additionalProperties: false
+      required: [id, name, collectionName, embeddingModel]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        collectionName:
+          type: string
+        embeddingModel:
+          type: string
+    KnowledgeDocumentOverviewOutput:
+      type: object
+      additionalProperties: false
+      required: [knowledgeBases]
+      properties:
+        knowledgeBases:
+          type: array
+          items:
+            $ref: "#/components/schemas/KnowledgeDocumentOverviewEntry"
+    KnowledgeDocumentOverviewEntry:
+      type: object
+      additionalProperties: false
+      required: [id, name, totals, byStatus]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        totals:
+          $ref: "#/components/schemas/KnowledgeDocumentOverviewTotals"
+        byStatus:
+          $ref: "#/components/schemas/KnowledgeDocumentOverviewByStatus"
+    KnowledgeDocumentOverviewTotals:
+      type: object
+      additionalProperties: false
+      required: [documents, chunks, bytes]
+      properties:
+        documents:
+          type: integer
+          format: int64
+          minimum: 0
+        chunks:
+          type: integer
+          format: int64
+          minimum: 0
+        bytes:
+          type: integer
+          format: int64
+          minimum: 0
+    KnowledgeDocumentOverviewByStatus:
+      type: object
+      additionalProperties: false
+      required: [pending, running, failed, success, disabled]
+      properties:
+        pending:
+          type: integer
+          format: int64
+          minimum: 0
+        running:
+          type: integer
+          format: int64
+          minimum: 0
+        failed:
+          type: integer
+          format: int64
+          minimum: 0
+        success:
+          type: integer
+          format: int64
+          minimum: 0
+        disabled:
+          type: integer
+          format: int64
+          minimum: 0
+    Problem:
+      type: object
+      additionalProperties: true
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string

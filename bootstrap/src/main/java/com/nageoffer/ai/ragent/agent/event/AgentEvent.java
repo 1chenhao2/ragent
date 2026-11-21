@@ -46,6 +46,13 @@ public record AgentEvent(AgentEventType type, Object data) {
     }
 
     /**
+     * Creates an approval-required event.
+     */
+    public static AgentEvent approvalRequired(String approvalId) {
+        return new AgentEvent(AgentEventType.APPROVAL_REQUIRED, new ApprovalPayload(approvalId));
+    }
+
+    /**
      * Creates a cancelled event.
      */
     public static AgentEvent cancelled(CompletionPayload payload) {

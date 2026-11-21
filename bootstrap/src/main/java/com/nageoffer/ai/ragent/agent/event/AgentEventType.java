@@ -36,6 +36,11 @@ public enum AgentEventType {
     ANSWER_DELTA,
 
     /**
+     * Workflow is paused until an approval decision is supplied.
+     */
+    APPROVAL_REQUIRED,
+
+    /**
      * Run cancelled.
      */
     CANCELLED,

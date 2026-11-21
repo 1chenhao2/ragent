@@ -53,7 +53,12 @@ public enum SSEEventType {
     /**
      * 拒绝事件
      */
-    REJECT("reject");
+    REJECT("reject"),
+
+    /**
+     * Workflow approval request.
+     */
+    APPROVAL("approval");
 
     private final String value;
 

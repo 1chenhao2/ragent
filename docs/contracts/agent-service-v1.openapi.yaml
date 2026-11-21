@@ -14,11 +14,71 @@ paths:
       security: []
       responses:
         "200":
-          description: Service is ready to accept new runs.
+          description: Process liveness. This endpoint does not assert that RAG dependencies are configured.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
+  /internal/v1/ready:
+    get:
+      operationId: getReadiness
+      security: []
+      responses:
+        "200":
+          description: RAG adapters are configured and the service may accept Agent traffic.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          $ref: "#/components/responses/Problem"
+  /internal/v1/metrics:
+    get:
+      operationId: getPrometheusMetrics
+      security: []
+      responses:
+        "200":
+          description: Low-cardinality Prometheus run counters, active gauges and duration histograms.
+          content:
+            text/plain:
+              schema:
+                type: string
+  /internal/v1/ingestion/text-chunks:
+    post:
+      operationId: computeTextIngestionChunks
+      description: |
+        Computes chunks and embeddings for Markdown or plain text supplied by Java.
+        Java retains file storage, document metadata, transactions, chunk persistence and vector writes.
+        The delegated token must include the `ingestion:compute` tool scope.
+      parameters:
+        - $ref: "#/components/parameters/Traceparent"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TextIngestionRequest"
+      responses:
+        "200":
+          description: Chunks and embeddings are ready for Java-owned persistence.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TextIngestionResponse"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "502":
+          description: The configured embedding provider could not produce usable vectors.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
   /internal/v1/agent-runs:
     post:
       operationId: createAgentRun
@@ -173,6 +233,75 @@ components:
           enum: [ready]
         version:
           type: string
+    TextIngestionRequest:
+      type: object
+      additionalProperties: false
+      required: [documentName, mimeType, content, chunkingMode, chunkConfig]
+      properties:
+        documentName:
+          type: string
+          minLength: 1
+          maxLength: 512
+        mimeType:
+          type: string
+          enum: [text/plain, text/markdown, text/x-markdown]
+        content:
+          type: string
+          minLength: 1
+          maxLength: 4000000
+        chunkingMode:
+          type: string
+          enum: [fixed_size, structure_aware]
+        chunkConfig:
+          type: object
+          additionalProperties:
+            type: integer
+        embeddingModelId:
+          type: [string, "null"]
+    TextIngestionResponse:
+      type: object
+      additionalProperties: false
+      required: [chunks, timings]
+      properties:
+        chunks:
+          type: array
+          items:
+            $ref: "#/components/schemas/TextIngestionChunk"
+        timings:
+          $ref: "#/components/schemas/TextIngestionTimings"
+    TextIngestionChunk:
+      type: object
+      additionalProperties: false
+      required: [index, content, embedding, metadata]
+      properties:
+        index:
+          type: integer
+          minimum: 0
+        content:
+          type: string
+        embedding:
+          type: array
+          minItems: 1
+          items:
+            type: number
+            format: float
+        metadata:
+          type: object
+          additionalProperties: true
+    TextIngestionTimings:
+      type: object
+      additionalProperties: false
+      required: [parseDurationMs, chunkDurationMs, embedDurationMs]
+      properties:
+        parseDurationMs:
+          type: integer
+          minimum: 0
+        chunkDurationMs:
+          type: integer
+          minimum: 0
+        embedDurationMs:
+          type: integer
+          minimum: 0
     AgentRunRequest:
       type: object
       additionalProperties: false

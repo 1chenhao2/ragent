@@ -18,6 +18,7 @@
 package com.nageoffer.ai.ragent.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nageoffer.ai.ragent.agent.conversation.AgentConversationRecorder;
 import com.nageoffer.ai.ragent.agent.gateway.AgentGateway;
 import com.nageoffer.ai.ragent.agent.legacy.LegacyRagAgentGateway;
 import com.nageoffer.ai.ragent.agent.python.DelegatedAgentTokenIssuer;
@@ -68,6 +69,7 @@ class AgentGatewaySelectionTest {
                 .withBean(ObjectMapper.class, ObjectMapper::new)
                 .withBean(PythonAgentProperties.class, () -> properties)
                 .withBean(DelegatedAgentTokenIssuer.class, () -> new DelegatedAgentTokenIssuer(properties))
+                .withBean(AgentConversationRecorder.class, () -> mock(AgentConversationRecorder.class))
                 .withUserConfiguration(LegacyRagAgentGateway.class, PythonAgentGateway.class);
     }
 }

@@ -20,7 +20,7 @@ package com.nageoffer.ai.ragent.rag.service.impl;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.nageoffer.ai.ragent.agent.adapter.sse.SseAgentEventPublisher;
-import com.nageoffer.ai.ragent.agent.gateway.AgentAccessContext;
+import com.nageoffer.ai.ragent.agent.gateway.AgentAccessResolver;
 import com.nageoffer.ai.ragent.agent.gateway.AgentGateway;
 import com.nageoffer.ai.ragent.agent.gateway.AgentRunCommand;
 import com.nageoffer.ai.ragent.agent.gateway.AgentType;
@@ -31,8 +31,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.util.Set;
-
 /**
  * RAG chat compatibility facade.
  */
@@ -41,12 +39,12 @@ import java.util.Set;
 public class RAGChatServiceImpl implements RAGChatService {
 
     private final AgentGateway agentGateway;
+    private final AgentAccessResolver agentAccessResolver;
 
     @Override
     public void streamChat(String question, String conversationId, Boolean deepThinking, SseEmitter emitter) {
         LoginUser user = UserContext.requireUser();
         String actualConversationId = StrUtil.isBlank(conversationId) ? IdUtil.getSnowflakeNextIdStr() : conversationId;
-        Set<String> roles = StrUtil.isBlank(user.getRole()) ? Set.of() : Set.of(user.getRole());
         String runId = IdUtil.getSnowflakeNextIdStr();
         AgentRunCommand command = new AgentRunCommand(
                 IdUtil.getSnowflakeNextIdStr(),
@@ -56,7 +54,7 @@ public class RAGChatServiceImpl implements RAGChatService {
                 AgentType.KNOWLEDGE,
                 question,
                 Boolean.TRUE.equals(deepThinking),
-                new AgentAccessContext(null, roles, Set.of(), Set.of("knowledge:read"))
+                agentAccessResolver.resolve(user, AgentType.KNOWLEDGE)
         );
         agentGateway.start(command, new SseAgentEventPublisher(emitter));
     }

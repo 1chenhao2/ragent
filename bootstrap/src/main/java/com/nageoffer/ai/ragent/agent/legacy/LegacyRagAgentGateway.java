@@ -18,6 +18,7 @@
 package com.nageoffer.ai.ragent.agent.legacy;
 
 import com.nageoffer.ai.ragent.agent.event.AgentEventPublisher;
+import com.nageoffer.ai.ragent.agent.gateway.AgentApprovalDecision;
 import com.nageoffer.ai.ragent.agent.gateway.AgentGateway;
 import com.nageoffer.ai.ragent.agent.gateway.AgentRunCommand;
 import com.nageoffer.ai.ragent.agent.gateway.AgentRunHandle;
@@ -81,5 +82,10 @@ public class LegacyRagAgentGateway implements AgentGateway {
     @Override
     public void cancel(String runId) {
         taskManager.cancel(runId);
+    }
+
+    @Override
+    public AgentRunHandle resume(String runId, AgentApprovalDecision decision) {
+        throw new UnsupportedOperationException("Legacy Agent runtime does not support workflow approval resume");
     }
 }

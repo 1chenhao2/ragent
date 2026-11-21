@@ -86,6 +86,19 @@ class Problem(ContractModel):
     trace_id: str | None = Field(default=None, alias="traceId")
 
 
+class BusinessToolCommand(ContractModel):
+    tool_name: str = Field(min_length=1, alias="toolName")
+    tool_call_id: str = Field(min_length=1, alias="toolCallId")
+    idempotency_key: str = Field(min_length=16, max_length=128, alias="idempotencyKey")
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+class BusinessToolResult(ContractModel):
+    tool_call_id: str = Field(min_length=1, alias="toolCallId")
+    tool_name: str = Field(min_length=1, alias="toolName")
+    output: dict[str, Any]
+
+
 class AgentRunAccepted(ContractModel):
     run_id: str = Field(alias="runId")
     status: RunStatus
