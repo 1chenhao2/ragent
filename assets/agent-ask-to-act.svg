@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-labelledby="diagram-title diagram-description">
+  <title id="diagram-title">退换货示例中的问答与办理路径</title>
+  <desc id="diagram-description">咨询规则时，AgentScope 查询知识库并流式回答。申请退货时，AgentScope 按手册准备待确认调用，用户同意后调用售后工具。</desc>
+  <defs>
+    <marker id="read-arrow" viewBox="0 0 14 12" markerWidth="14" markerHeight="12" refX="13" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0 14 6 0 12Z" fill="#2860F1"/>
+    </marker>
+    <marker id="act-arrow" viewBox="0 0 14 12" markerWidth="14" markerHeight="12" refX="13" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0 14 6 0 12Z" fill="#FF7A00"/>
+    </marker>
+  </defs>
+
+  <rect x="1" y="1" width="1198" height="673" rx="22" fill="#F7F8FA" stroke="#D8E2EF" stroke-width="2"/>
+  <g font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, Arial, sans-serif">
+    <rect x="48" y="69" width="103" height="39" rx="12" fill="#2860F1"/>
+    <text x="99.5" y="96" fill="#FFFFFF" font-size="21" font-weight="700" text-anchor="middle">查规则</text>
+    <rect x="48" y="369" width="103" height="39" rx="12" fill="#FF7A00"/>
+    <text x="99.5" y="396" fill="#172644" font-size="21" font-weight="700" text-anchor="middle">办退货</text>
+
+    <g fill="#FFFFFF" stroke="#D8E2EF" stroke-width="2">
+      <rect x="48" y="132" width="211" height="130" rx="16"/>
+      <rect x="48" y="432" width="211" height="130" rx="16"/>
+    </g>
+    <g fill="#172644" font-size="23" font-weight="700">
+      <text x="65" y="190">退换货规则是啥？</text>
+      <text x="65" y="490">帮我申请退货</text>
+    </g>
+    <g fill="#455671" font-size="20">
+      <text x="65" y="222">用户先咨询政策</text>
+      <text x="65" y="522">同一会话继续办理</text>
+    </g>
+
+    <rect x="309" y="132" width="215" height="430" rx="18" fill="#172644"/>
+    <path d="M338 268H495M338 425H495" stroke="#516583" stroke-width="1.5"/>
+    <g fill="#FFFFFF" font-weight="700" text-anchor="middle">
+      <text x="416.5" y="326" font-size="31">AgentScope</text>
+      <text x="416.5" y="371" font-size="39">ReAct</text>
+    </g>
+    <text x="416.5" y="402" text-anchor="middle" fill="#DCE7FA" font-size="20">同一会话</text>
+
+    <g stroke-width="2">
+      <rect x="574" y="132" width="243" height="130" rx="16" fill="#EEF4FF" stroke="#A9C0FF"/>
+      <rect x="867" y="132" width="285" height="130" rx="16" fill="#EEF4FF" stroke="#A9C0FF"/>
+      <rect x="574" y="432" width="243" height="130" rx="16" fill="#FFF2E5" stroke="#FFC795"/>
+      <rect x="867" y="432" width="285" height="130" rx="16" fill="#FFF2E5" stroke="#FFC795"/>
+    </g>
+    <g fill="#172644" font-size="25" font-weight="700">
+      <text x="595" y="190">检索知识库</text>
+      <text x="888" y="190">返回规则说明</text>
+      <text x="595" y="490">保存待确认调用</text>
+      <text x="888" y="490">确认后提交申请</text>
+    </g>
+    <g font-size="20">
+      <text x="595" y="222" fill="#2453C7" font-family="Consolas, Menlo, monospace">search_knowledge</text>
+      <text x="888" y="222" fill="#2453C7">通过 SSE 推送回答</text>
+      <text x="595" y="522" fill="#9A4100">加载手册后请求确认</text>
+      <text x="888" y="522" fill="#9A4100" font-family="Consolas, Menlo, monospace">apply_after_sale</text>
+    </g>
+
+    <g fill="none" stroke-width="3.5">
+      <path d="M259 197H302" stroke="#2860F1" marker-end="url(#read-arrow)"/>
+      <path d="M524 197H567" stroke="#2860F1" marker-end="url(#read-arrow)"/>
+      <path d="M817 197H860" stroke="#2860F1" marker-end="url(#read-arrow)"/>
+      <path d="M259 497H302" stroke="#FF7A00" marker-end="url(#act-arrow)"/>
+      <path d="M524 497H567" stroke="#FF7A00" marker-end="url(#act-arrow)"/>
+      <path d="M817 497H860" stroke="#FF7A00" marker-end="url(#act-arrow)"/>
+    </g>
+
+    <path d="M48 609H1152" stroke="#D8E2EF" stroke-width="2"/>
+    <text x="48" y="646" fill="#455671" font-size="20">收到同意后，服务端从会话状态恢复原调用参数。</text>
+  </g>
+</svg>

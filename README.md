@@ -1,41 +1,32 @@
 # Ragent · Java AgentScope 知识库助手
 
-**面向企业知识问答的 Agentic RAG 项目**
+**问退换规则可以直接答，申请退货要先确认。**
 
-基于开源 Ragent，用 Java AgentScope ReAct 把知识库检索、Skills 和 MCP 工具串到同一个对话里。用户可以连续追问，多步任务中需要确认的操作会暂停，收到决定后再继续。
+基于开源 Ragent 的 Java 实践。用 AgentScope ReAct 串起知识库问答、按需加载的 Skills 和 MCP 工具调用。一个会话可以从咨询转到办理，写操作经用户确认后才继续。
 
-[ReAct 装配](agent/src/main/java/com/nageoffer/ai/ragent/agent/config/ReActAgentProvider.java) · [对话入口](agent/src/main/java/com/nageoffer/ai/ragent/agent/controller/AgentChatController.java) · [知识库检索](rag/src/main/java/com/nageoffer/ai/ragent/rag/service/KnowledgeSearchFacade.java) · [技能加载测试](agent/src/test/java/com/nageoffer/ai/ragent/agent/skill/AgentScopeSkillActivationLifecycleTest.java)
+[Agent 装配](agent/src/main/java/com/nageoffer/ai/ragent/agent/config/ReActAgentProvider.java)　[退换货手册](resources/initializer/bit-selection/skills/after-sale-apply.md)　[确认入口](agent/src/main/java/com/nageoffer/ai/ragent/agent/controller/AgentChatController.java)　[验证用例](#验证入口)
 
-`Java 17` · `Spring Boot` · `AgentScope Java` · `PostgreSQL / pgvector` · `Redis / Redisson` · `SSE`
+![退换货示例。咨询规则走知识库检索，申请退货时加载办理手册，确认后调用售后工具](assets/agent-ask-to-act.png)
 
-## 一次问答怎么走
+## 同一个会话里的两个请求
 
-前端通过 SSE 提问。服务端加载会话状态，把知识库检索和可用 MCP 工具交给 ReAct Agent。Agent 根据中间结果选择继续调用工具或给出回答，服务端将增量输出推回前端，并保存会话状态。
+1. **「退换货规则是什么？」** Agent 可以调用 `search_knowledge` 查知识库，把规则通过 SSE 返回。示例手册明确区分了政策咨询与售后办理。[知识库工具](agent/src/main/java/com/nageoffer/ai/ragent/agent/tool/KnowledgeSearchTool.java)
+2. **「那帮我申请退货。」** Agent 加载退换货手册，核对订单和商品，再准备 `apply_after_sale` 调用。用户同意后，Java 从保存的会话状态取回原调用并继续。售后单是否创建，由 MCP 工具的返回结果决定。[技能绑定](resources/initializer/bit-selection/skills/010-after-sale-apply.properties) · [确认逻辑](agent/src/main/java/com/nageoffer/ai/ragent/agent/service/impl/AgentChatServiceImpl.java) · [售后工具](mcp-server/src/main/java/com/nageoffer/ai/ragent/mcp/executor/bit/BitAfterSaleApplyMcpExecutor.java)
 
-```mermaid
-flowchart LR
-    Browser["前端"] -->|SSE 请求| Chat["Spring Boot<br/>Agent 对话服务"]
-    Chat --> ReAct["AgentScope Java<br/>ReAct Agent"]
-    ReAct -->|检索知识| Rag["知识库 RAG<br/>pgvector"]
-    ReAct -->|按需加载技能| Skills["Skills"]
-    ReAct -->|调用可用工具| Mcp["MCP 工具"]
-    ReAct -->|保存会话状态| State["PostgreSQL"]
-    Chat -.->|流式增量与确认| Browser
-```
+上面是按仓库中的售后示例梳理的源码链路。
 
-## 实现与源码
+## 三个关键实现
 
-| 模块 | 实现 | 入口 |
-| --- | --- | --- |
-| ReAct 与检索 | 将知识库问答注册为工具，Agent 依据中间结果决定是否继续检索或调用 MCP。 | [Agent 装配](agent/src/main/java/com/nageoffer/ai/ragent/agent/config/ReActAgentProvider.java) · [知识库工具](agent/src/main/java/com/nageoffer/ai/ragent/agent/tool/KnowledgeSearchTool.java) |
-| Skills 与人工确认 | `load_skill` 按需加载手册，按会话上下文开放相关工具。需确认的调用保存于会话，用户确认后恢复执行。 | [工具可见性](agent/src/main/java/com/nageoffer/ai/ragent/agent/skill/AgentSkillMaskingMiddleware.java) · [确认处理](agent/src/main/java/com/nageoffer/ai/ragent/agent/service/impl/AgentChatServiceImpl.java) |
-| 上下文与会话 | 按上下文水位裁剪工具结果，对较早的对话做摘要，保留近期消息和工具调用关系。Agent 状态写入 PostgreSQL。 | [上下文压缩](agent/src/main/java/com/nageoffer/ai/ragent/agent/memory/AgentContextCompactor.java) · [状态存储](agent/src/main/java/com/nageoffer/ai/ragent/agent/state/PgAgentStateStore.java) |
-| 流式停止与并发 | 用会话互斥和并发许可约束任务启动，用 Redis 消息传播跨节点取消和清理信号。 | [运行闸门](agent/src/main/java/com/nageoffer/ai/ragent/agent/service/handler/AgentRunGate.java) · [任务取消](framework/src/main/java/com/nageoffer/ai/ragent/framework/web/StreamTaskManager.java) |
+- **模型什么时候能看到写工具？** `load_skill` 按需加载手册后，推理阶段才暴露绑定的工具。工具执行前再校验一次。手册被上下文压缩移走后，相关工具随之收回。[工具可见性](agent/src/main/java/com/nageoffer/ai/ragent/agent/skill/AgentSkillMaskingMiddleware.java) · [执行校验](agent/src/main/java/com/nageoffer/ai/ragent/agent/tool/McpToolProxy.java)
+- **确认时的调用参数从哪来？** 前端提交会话、消息标识和同意或拒绝。服务端从 PostgreSQL 持久化的 Agent 状态取回待确认调用，按原参数交还 AgentScope 处理。[确认入口](agent/src/main/java/com/nageoffer/ai/ragent/agent/controller/AgentChatController.java) · [状态存储](agent/src/main/java/com/nageoffer/ai/ragent/agent/state/PgAgentStateStore.java)
+- **长对话和断连怎么收尾？** 分级裁剪历史工具结果并摘要旧对话，保持调用与结果配对。SSE 停止时通过 Redis 传播取消信号，会话互斥约束重复启动。[上下文压缩](agent/src/main/java/com/nageoffer/ai/ragent/agent/memory/AgentContextCompactor.java) · [流式任务控制](framework/src/main/java/com/nageoffer/ai/ragent/framework/web/StreamTaskManager.java)
 
 ## 验证入口
 
 - [AgentScope 技能加载测试](agent/src/test/java/com/nageoffer/ai/ragent/agent/skill/AgentScopeSkillActivationLifecycleTest.java)和[上下文裁剪测试](agent/src/test/java/com/nageoffer/ai/ragent/agent/memory/AgentContextTrimmerTest.java)对应工具开放与消息裁剪行为。
 - [流式事件测试](agent/src/test/java/com/nageoffer/ai/ragent/agent/service/handler/AgentStreamEventBridgeTest.java)和[任务收尾测试](agent/src/test/java/com/nageoffer/ai/ragent/agent/service/handler/AgentRunHandleTest.java)对应增量与终止流程。
+
+技术栈为 Java 17、Spring Boot、AgentScope Java、PostgreSQL / pgvector、Redis / Redisson。流程图提供 [SVG 源文件](assets/agent-ask-to-act.svg)。
 
 ## 上游与许可
 
